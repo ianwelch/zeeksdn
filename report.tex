@@ -1,0 +1,234 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{graphicx}
+
+\title{Investigating the integration of SDN Controllers with the network security monitor Zeek}
+\author{Ben Cravens\\[1ex] 
+\url{cravenbenj@myvuw.ac.nz}
+\\[1ex]
+Ian Welch (Supervisor)\\[1ex] Harith Al-Sahaf (Supervisor)} 
+\date{February 2022}
+
+\begin{document}
+
+\maketitle
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Historical interlude / motivation: the need for better cybersecurity tools}
+Originally, digital computers were a utility technology used by experts in science and engineering to automate difficult mathematical calculations. These computers were massive room sized machines used to calculate yields in nuclear bombs or break encrypted transmissions.
+\\
+\\
+Nowadays, computers are everywhere. Most of the world's computers are smartphones, used by everyday people. Everyone relies on computers to work, communicate with loved ones, study, process financial transactions and entertain themselves. With the exponential increase in computing power, it has also become profitable to extend everyday appliances with networking capability. These devices are known as the "Internet of Things (IOT)". Now your fridge, toaster, and car are all connected to the internet.
+\\
+These innovations haven't come for free. With the advent of the internet and the ubiquity of personal computing and IOT devices, there has been a corresponding rise in cybercrime. Applications or operating systems are sometimes poorly designed and have exploitable software bugs. Every networked device you interact with increases the area of your attack surface. Online banking can be hacked and your money can be stolen. Password hashes can be leaked in data breaches. IOT devices can be turned into monitoring devices. Even industrial machines are vulnerable to viruses; the most infamous example being Stuxnet, a computer worm targeting industrial control systems used to enrich uranium. 
+\\
+\\
+According to Microsoft's Digital Defense Report \footnote{https://www.microsoft.com/security/blog/2021/10/11/how-cyberattacks-are-changing-according-to-new-microsoft-digital-defense-report/}, in 2021, cybercrime has "...become more sophisticated, widespread, and relentless. Criminals have targeted critical infrastructure—healthcare, information technology, financial services, and energy sectors". With the advent of widespread work from home orders due to COVID, there has been a corresponding uptick in cyber-crime as businesses scramble to design systems that can be accessed remotely and non-technical workers fall victim to ransomware, phising emails and malware. There is obviously a huge need for better cyber-security tools.
+
+\section{Goal}
+The goal of my project was to investigate what the options were for integrating the open source network security monitor Zeek with a software defined networking controller. In this way, we could have a network where a given host is sending malicious data, mirror this data to Zeek, have Zeek detect it, and then have Zeek quarantine the host by sending a command to modify the switch table via the SDN controller. In the future (i.e as a master project), we want to use a machine learning algorithm to determine what rules we should focus implementing in Zeek to more effectively quarantine malicious hosts.
+\section{Background}
+\textbf{Note: there are more detailed documents I wrote for my own reference that are too detailed for this report, but can be accessed in the VUW ECS gitlab repository. Contact me if you need access to this.}
+\subsection{What is Software Defined Networking (SDN)?}
+\begin{itemize}
+\item Traditional networks use hardware devices such as switches or routers to control the flow of packets through the network. 
+\item Lately with larger networks and higher data flow, there has been a need for more configurable, flexible networks to better meet security and bandwidth needs.
+\item In SDN, the network is virtualized so that it can be configured programatically. 
+\item In SDN, there are three layers to the network:
+\item The lowest layer is the Data layer. This is the layer that consists of hardware devices such as switches. They refer to flow entries in their switch tables to determine how to forward packets.
+\item The middle layer is the control plane. This is where the SDN controller resides. The SDN controller takes information from the application layer and converts this into modifications that should be made to the routing tables of the switches in the data plane. 
+\item The highest layer is the application layer. This is where the applications run such as Zeek, our IDS that decides which hosts in the network need to be quarantined. The application layer passes this information down to the control layer to be converted into switch flow table modifications.
+\item In this way, the "brain" of the network (the control plane) is seperated from the "body" of the network (the data plane).
+\item The SDN controller tells the hardware devices such as network switches how to forward packets throughout the network.
+\item By doing this, Software-defined networking enables a new way of controlling the routing of data packets through a centralized server. 
+\item The networking protocol often used to enable software defined networking controllers to communicate with switches is called OpenFlow. \item In my project we investigated two different SDN controllers that implement the OpenFlow protocol. Once the SDN controller decides that a certain rule (or flow) should be added to the switch, it uses the OpenFlow protocol to do this.
+\end{itemize}
+\subsection{Why is SDN important?}
+\begin{itemize}
+    \item SDN is a substantial step up from traditional networking because of the following:
+    \item \textbf{Easier to program the network:} Instead of having to program multiple vendor-specific hardware devices to control the flow of traffic in a network, you only have to program one open source SDN controller. Also it is usually has a user friendly API in a high level language like Python, making it a lot easier to program if you don't have a hardware background.
+    \item \textbf{Easier to change the network:} Instead of having to physically rearrange or the hardware in your network or buy more to add to it, you can simply reprogram your SDN controller or provision more resources.
+    \item \textbf{Better security:} This is why we are investigating SDNs. SDN gives us the ability to centrally monitor and command the network using a single SDN controller. On the reactive side, this means that we can automatically detect threats and quarantine malicious devices. Also on the proactive side, we can more easily separate the network into different zones based on differing security needs.
+\end{itemize}
+\subsection{OpenFlow Protocol}
+\begin{itemize}
+    \item OpenFLow is a communications protocol that gives network controllers access to the forwarding plane of a network switch / router in a network.
+    \item The forwarding plane defines the part of the router that decides what to do with incoming packets.
+    \item In SDN, the control plane of the network is seperate from the data/forwarding plane.
+    \item The SDN controller is a centralized physical/virtual device that communicates with all the “dumb” network devices and updates them on how to forward traffic. 
+    \item OpenFlow is the most commonly used protocol in software-defined networking (SDN). 
+    \item OpenFlow enables the SDN controller to recieve information from the network and send commands to switches to modify their flow tables. In this way, the SDN controllers can determine the flow of packets throughout the network.
+    \item OpenFlow allows for more sophisticated traffic management than is feasible using access control lists (ACLs) and routing protocols. 
+    \item OpenFlow allows switches from different vendors to be managed remotely using a single, open protocol. 
+    \item The OpenFlow protocol is layered on top of the Transmission Control Protocol (TCP) and prescribes the use of Transport Layer Security (TLS) (Formerly SSL).
+    \item Controllers should listen on TCP port 6653 for switches that want to set up a connection.
+    \item The OpenFlow protocol is only established between a controller and the switch. Switches do not pass openflow traffic to eachother.
+    \item There needs to be IP connectivity between the controller and the switches to establish an OF connection.
+    \item OF channel is formed only after a successful TCP 3-way handshake.
+    \item Flow tables are like a traditional switch’s routing table that stores MAC addresses and corresponding output interfaces.
+    \item Flow tables store flow entries or flows that tell the SDN switch where to output a packet when it comes to an incoming port.
+\end{itemize}
+\subsection{Faucet}
+\begin{itemize}
+    \item Faucet is a compact open source network controller than implements the OpenFlow protocol.
+    \item Usually network control functions such as routing, switching and host discovery are implemented in embedded firmware on routers and switches.
+    \item Faucet migrates these network control functions from routers and switches to vendor independent server-based software.  
+    \item As a result, the software implementing these functions is easier to apply modern best practices to.
+    \item Faucet is relatively small and simple, being ~1000s of lines of code, as opposed to millions in other SDN controllers.
+    \item Faucet is implementation / vendor agnostic
+    \item Faucet does not need connectivity to external databases to work.
+    \item You can scale Faucet up through replication.
+    \item Faucet can program a switch and self-learn connected hosts in a few seconds.
+\end{itemize}
+\subsection{Zeek}
+\textbf{Intro to Zeek:}
+\begin{itemize}
+    \item Zeek is a passive (non interventionist) open-source network traffic analyzer.
+    \item Many people in industry use Zeek as a network security monitor to investigate suspicious activity.
+    \item Zeek also supports non security related network traffic analysis such as performance measurement and troubleshooting.
+    \item Zeek makes a lot of logs that describe network activity.
+    \item Not only do these logs contain information on every connection, but they also include network traffic application layer information.
+    \item This can include HTTP sessions, DNS requests, SSL certificates, etc.
+    \item By default, Zeek writes all of this information into JSON files. These JSON files can be piped to databases or other SIEM products.
+    \item Zeek also has functionality for analysis and detection tasks such as grabbing files from HTTP sessions, comparing suspected malware with external registries, reporting vulnerable software, detecting SSH brute force attacks, etc.
+    \item The Zeek language (Turing complete, python like), which allows you to customize Zeek to implement novel functionality.
+    \item For example, you can also implement more complicated forms of malware detection such as behavioural analysis.
+    \item Zeek is very good at high-speed, high-volume network monitoring and is used by universities, research labs, corporations, and government agencies.
+    \item Zeek scales well by enabling load balancing. Zeek implements load balancing with "Zeek Clusters" which are supported automatically with ZeekControl. 
+\end{itemize}
+\textbf{Why Zeek?}
+Security teams usually depend on four kinds of data source.
+\begin{itemize}
+    \item \textit{Third party sources}: law enforcement, commercial threat intelligence orgs, etc.
+    \item \textit{Network data}: Data from their own network traffic
+    \item \textit{Infrastructure and application data} Data from applications and cloud enviroments
+    \item \textit{Endpoint data} Data from hosts.
+\end{itemize}
+Zeek is good at giving you the second type of data, network data. Again, you can split network data into four types.
+\begin{itemize}
+    \item Full content
+    \item Transaction data
+    \item Extracted content
+    \item Alert data
+\end{itemize}
+Zeek is best known for its transaction data. Zeek records high fidelity logs of protocols and activity flowing through the link.
+\subsection{Zeek Architecture}
+Zeek is layered into two components: the event engine and the policy script interpreter.
+
+\subsubsection{Event engine}
+\begin{itemize}
+    \item The event engine categorizes incoming network traffic packets into events, which describe what is occurring.
+    \item I.e every HTTP-request detected generates a HTTP-request event.
+    \item The data pipeline monitors at different levels: i.e it performs packet analysis for lower level protocols, and session analysis for application layer protocols.
+    \item The Zeek event engine can be extended via plugins.
+\end{itemize}
+
+\subsubsection{Script interpreter}
+\begin{itemize}
+    \item The script interpreter executes a set of event handlers written in the Zeek language.
+    \item You can express a security policy in the Zeek language.
+    \item Zeek scripts are stateful and analysis can evolve over time.
+\end{itemize}
+\subsection{Zeek Messaging Library - Broker}
+\begin{itemize}
+    \item The Broker library enables applications to communicate via Zeek's publish/subscribe data model.
+    \item Broker also allows you to specify databases to organize data.
+    \item You can interact with Broker via a Python API.
+    \item Broker models hosts sending/recieving data as endpoints.
+    \item Endpoints can "peer" with other endpoints to communicate with them. \item Endpoints do this by publishing data under a specific topic.
+    \item If any other endpoints has a subscription to this topic, it will receive the published data. This is known as the publish / subscribe model.
+    \item Endpoints can communicate with the same OS process, or communicate with endpoints in a different OS process or remote machine.
+    \item The fundamental unit of exchange is a message. The message consists of a topic and some data.
+    \item Endpoints can choose to subscribe to a given topic.
+    \item When endpoints receive a message to a given topic, they will forward this message to all of the connected nodes (peers) which are subscribed to the topic.
+\end{itemize}
+\section{Results}
+\subsection{Trying to use Ryu - Doesn't work}
+In the first part of my project, I investigated integrating a simple SDN controller called Ryu with Zeek. The framework Zeek uses to connect to SDN controllers is called Broker, as described above. In the supplementary materials I have supplied, there are detailed descriptions on how Ryu, Zeek, and Broker work, and in my ECS gitlab repo, there are some well commented scripts showing how to build basic examples with these tools.
+\\
+\\
+I first took most of the project to get up to speed with Ryu, Zeek, and Broker, and the network virtualisation tool I was using, mininet. I wrote example scripts to generate a virtual network in mininet, and then administer this network with a Ryu SDN controller. This worked fine.
+\\
+\\
+The next step was to connect this SDN controller to a Zeek instance using NetControl, the Zeek framework that uses "Broker" to talk to external SDN Controllers. Unfortunately after trying to get this to work for a few weeks with a simple example, I came to the conclusion that the library was no longer functional with the current version of Zeek. My suspicions were confirmed when I posted the error I had been getting to Zeek's github page as an issue and a developer said the framework and code I was using was no longer supported (although they generously offered to patch it!).
+\footnote{ \url{https://github.com/zeek/zeek-netcontrol/issues/11#issuecomment-1033852852}}
+\newpage
+\subsection{Using 'Dam' - It Works!}
+Now that I had ruled out using Ryu, the other candidate to look at was 'Dam' \footnote{https://github.com/alshaboti/dam} a project that integrates the Faucet SDN controller with Zeek using Zeek's NetControl framework (i.e Broker). 
+\\
+\\
+It took me a while to get 'Dam' set up on a virtual machine. In the ECS gitlab repository for my project, I provide a shell script to automatically configure a fresh Ubuntu virtual machine to work with 'Dam'. I recommend at least 30gb of hard drive space and 4gb RAM for the VM. Once this is set up, I had to figure out why the thing wasn't working, the details of this are in the documentation section of my gitlab ecs repo.
+
+\newpage 
+
+\subsection{Testing 'Dam'}
+'Dam' provides a set of scripts to test it with the following network topology:
+\\
+\\
+\includegraphics[width=\textwidth]{network_topo.png}
+\begin{itemize}
+    \item There are two hosts in the network
+    \item The first is an HTTP server running on port 8000
+    \item The second is a standard client host
+    \item All network traffic between them is mirrored to a Zeek instance
+    \item When malicious traffic is detected, it sends events to a backend Python security client.
+    \item The Python security client updates the Faucet .yaml file that specifies the modifications Faucet should make to the network switch tables.
+    \item Faucet constructs an OpenFlow message (called a "flow mod") to the OVS switch to modify its flow tables to meet the specifications in the .yaml file.
+    \item The OVS switch receives the OpenFlow "flow mod" message and updates its switch table accordingly
+    \item The flow of packets in the network is modified
+\end{itemize}
+In the test case, the modification we make to the OVS switch is to block traffic from the server to the client. More specifically, we want to check if there is a file being transferred from the server to the client, and if the file matches a certain hash, we want to modify the flow table so that packets from the server to the client are dropped. So the process would look like this:
+\\
+\\
+First, make sure you are root and have installed the necessary dependencies. An install script is located in my VUW ECS gitlab repo.
+\begin{figure}[h!]
+\caption{Source the setup file.}
+\includegraphics[width=\textwidth]{source.png}
+\end{figure}
+\begin{figure}[h!]
+\includegraphics[width=\textwidth]{gnmi.png}
+\caption{Create the gNMI certs. gNMI is what we are using to update the faucet .yaml file. More info can be found here: https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-authentication.md}
+\end{figure}
+\begin{figure}[h!]
+\caption{Create the instances in the network as processes running in their own terminal windows}
+\includegraphics[width=\textwidth]{create_xterms.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Configure the network interfaces of the instances and connect them to eachother.}
+\includegraphics[width=\textwidth]{create_net.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Startup the gNMI client we will use to update the faucet .yaml file.}
+\includegraphics[width=\textwidth]{create_gnmi.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Run the python security client. This client receives zeek events through the NetControl framework and uses gNMI to update the faucet.yaml file}
+\includegraphics[width=\textwidth]{security_client.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Run the zeek instance}
+\includegraphics[width=\textwidth]{run_zeek.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Run the http server on the server's terminal.}
+\includegraphics[width=\textwidth]{http_server.png}
+\end{figure}
+\begin{figure}[h!]
+\caption{Try to grab the /bin/bash file from the http server. The file hash will match our quarantine criteria and the connection will hang}
+\includegraphics[width=\textwidth]{finished.png}
+\end{figure}
+
+\clearpage
+\section{Conclusion \& Next Steps}
+During this project I learned a lot about SDN. I also effectively ruled out using Ryu/Zeek combo as an alternative to our existing Zeek/Faucet integration due to the deprecation of the Ryu package. 
+\\
+\\
+In the future, we want to use the 'Dam' Faucet-Zeek integration as infrastructure for my masters project, where we will take large amounts of network traffic data, and try to use a ML algorithm for feature selection - i.e what variables of traffic data are most indicative of malicious intent? A good example of this type of feature selection analysis can be found in a paper recently produced by the group which performs feature selection on IOT attack data generated via honeypot. \footnote{\url{http://al-sahaf.com/harith/pdfs/journals/j011_fgcs_2022.pdf}}
+\\
+\\
+From there we will compare the performance and time-efficiency of generating these rule automatically from these features instead of having a expert curate them via intuition and heuristics. From there we can see if we can build a pipeline to generate these rules automatically, feed them to Zeek, and from there pass them to 'Dam' to be installed as flow mods on switch tables. The heuristic reasoning as to why this would be a good idea is provided by "The bitter lesson" - in AI, models that scale with computation eventually outperform expert models. \footnote{http://incompleteideas.net/IncIdeas/BitterLesson.html}. Therefore it is worth investigating. If we can build a good ML model, it will probably generate rules more effectively than via expert intuition.   
+\end{document}

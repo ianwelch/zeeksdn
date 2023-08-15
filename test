@@ -1,0 +1,72 @@
+loading app zeek_controlled.py
+require_app: ryu.app.ofctl.service is required by zeek_controlled
+loading app ryu.controller.ofp_handler
+loading app ryu.app.ofctl.service
+loading app ryu.controller.ofp_handler
+instantiating app None of DPSet
+creating context dpset
+instantiating app zeek_controlled.py of BroController
+instantiating app ryu.controller.ofp_handler of OFPHandler
+instantiating app ryu.app.ofctl.service of OfctlService
+BRICK dpset
+  CONSUMES EventOFPStateChange
+  CONSUMES EventOFPPortStatus
+  CONSUMES EventOFPSwitchFeatures
+BRICK BroController
+  CONSUMES EventOFPFlowRemoved
+  CONSUMES EventOFPSwitchFeatures
+BRICK ofp_event
+  PROVIDES EventOFPStateChange TO {'dpset': {'dead', 'main'}, 'ofctl_service': {'dead'}}
+  PROVIDES EventOFPPortStatus TO {'dpset': {'main'}}
+  PROVIDES EventOFPSwitchFeatures TO {'dpset': {'config'}, 'BroController': {'config'}, 'ofctl_service': {'config'}}
+  PROVIDES EventOFPFlowRemoved TO {'BroController': {'main'}}
+  PROVIDES EventOFPBarrierReply TO {'ofctl_service': {'main'}}
+  PROVIDES EventOFPErrorMsg TO {'ofctl_service': {'main'}}
+  CONSUMES EventOFPEchoReply
+  CONSUMES EventOFPEchoRequest
+  CONSUMES EventOFPErrorMsg
+  CONSUMES EventOFPHello
+  CONSUMES EventOFPPortDescStatsReply
+  CONSUMES EventOFPPortStatus
+  CONSUMES EventOFPSwitchFeatures
+BRICK ofctl_service
+  CONSUMES EventOFPBarrierReply
+  CONSUMES EventOFPStateChange
+  CONSUMES GetDatapathRequest
+  CONSUMES EventOFPErrorMsg
+  CONSUMES SendMsgRequest
+  CONSUMES EventOFPSwitchFeatures
+Started broker communication...
+Broker loop...
+Waiting for broker message
+connected socket:<eventlet.greenio.base.GreenSocket object at 0x7f9e1ed38e50> address:('127.0.0.1', 56088)
+hello ev <ryu.controller.ofp_event.EventOFPHello object at 0x7f9e1ed45ac0>
+move onto config mode
+EVENT ofp_event->dpset EventOFPSwitchFeatures
+EVENT ofp_event->BroController EventOFPSwitchFeatures
+EVENT ofp_event->ofctl_service EventOFPSwitchFeatures
+switch features ev version=0x4,msg_type=0x6,msg_len=0x20,xid=0x14ef4d91,OFPSwitchFeatures(auxiliary_id=0,capabilities=79,datapath_id=1,n_buffers=0,n_tables=254)
+add dpid 1 datapath <ryu.controller.controller.Datapath object at 0x7f9e1ed45160> new_info <ryu.app.ofctl.service._SwitchInfo object at 0x7f9e1ed45e80> old_info None
+move onto main mode
+EVENT ofp_event->dpset EventOFPStateChange
+DPSET: register datapath <ryu.controller.controller.Datapath object at 0x7f9e1ed45160>
+Got broker status message
+Incoming connection established.
+Waiting for broker message
+Got broker message
+flow_clear for OpenFlow::BROKERof 1
+EVENT BroController->ofctl_service GetDatapathRequest
+EVENT BroController->ofctl_service GetDatapathRequest
+Sending message with xid(14ef4d93) to datapath(0000000000000001): version=None,msg_type=None,msg_len=None,xid=0x14ef4d93,OFPFlowMod(buffer_id=4294967295,command=3,cookie=0,cookie_mask=0,flags=0,hard_timeout=0,idle_timeout=0,instructions=[],match=OFPMatch(oxm_fields={}),out_group=4294967295,out_port=4294967295,priority=0,table_id=255)
+EVENT BroController->ofctl_service SendMsgRequest
+ofctl_service: Exception occurred during handler processing. Backtrace from offending handler [_handle_send_msg] servicing event [SendMsgRequest] follows.
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/ryu/base/app_manager.py", line 290, in _event_loop
+    handler(ev)
+  File "/usr/lib/python3/dist-packages/ryu/app/ofctl/service.py", line 150, in _handle_send_msg
+    datapath.set_xid(msg)
+  File "/usr/lib/python3/dist-packages/ryu/controller/controller.py", line 416, in set_xid
+    msg.set_xid(self.xid)
+  File "/usr/lib/python3/dist-packages/ryu/ofproto/ofproto_parser.py", line 224, in set_xid
+    assert self.xid is None
+AssertionError
